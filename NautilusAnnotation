@@ -1,0 +1,36 @@
+#!/bin/bash
+titledir="Catalog annotations"
+titlefile="File annotations"
+button="Save"
+
+case $LANG in
+    ru* )
+        titledir="Аннотации к каталогу"
+        titlefile="Аннотации к файлу"
+        button="Сохранить";;
+esac
+
+path=$(echo "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS")
+[[ $(echo "$path" | wc -l) -gt 1 ]] && exit
+
+yad="$(which yad) --class=${0##*/} --name=${0##*/}"
+title=$([ -d "$path" ] && echo "$titledir - ${path##*/}" || echo "$titlefile - ${path##*/}")
+ginfo=$(gio info -a 'metadata::annotation' "$path")
+out=$(echo "$ginfo" | sed -e 's/metadata::annotation://g' -e 's/^[ \t]*//' | awk 'NR>=5')
+sum=$(printf "$out" | md5sum | cut -d' ' -f1)
+wid=$(xprop -root | grep "_NET_ACTIVE_WINDOW(WINDOW)"| awk '{print $5}')
+
+if [[ -n "$path" ]]; then
+    save=$(echo -n "$out" | $yad --width=800 --height=500 --title "$title" \
+                                 --show-uri --wrap --editable --text-info \
+                                 --uri-color="#16a085" --button=$button:0)
+   if [ $? -eq 0 ]; then
+       if [[ -n $save ]]; then
+           [[ $sum != $(printf "$save" | md5sum | cut -d' ' -f1) ]] && \
+           gio set "$path" 'metadata::annotation' "$save"
+       else
+           gio set -t unset "$path" 'metadata::annotation'
+       fi
+       xdotool windowfocus $wid key F5
+   fi
+fi
